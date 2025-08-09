@@ -2,4 +2,4 @@
 ../Core/Src/mpu6000.c:22:6:MPU6000_Write	2
 ../Core/Src/mpu6000.c:38:6:MPU6000_Init	1
 ../Core/Src/mpu6000.c:64:6:MPU6000_Start_DMA	2
-../Core/Src/mpu6000.c:83:6:MPU6000_Process_DMA	1
+../Core/Src/mpu6000.c:82:6:MPU6000_Process_DMA	1

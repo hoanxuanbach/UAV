@@ -64,8 +64,8 @@ typedef struct{
 	float acc[3];
 	float gyro[3];
 	float temp;
-	uint8_t tx_buffer[16];
-	uint8_t dma_buffer[16];
+	volatile uint8_t tx_buffer[16];
+	volatile uint8_t dma_buffer[16];
 	volatile uint8_t state;
 	volatile bool spi_transfer_done;
 } MPU6000;

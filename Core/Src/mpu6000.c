@@ -71,13 +71,12 @@ void MPU6000_Start_DMA(MPU6000 *dev){
 
     HAL_StatusTypeDef status = HAL_SPI_TransmitReceive_DMA(dev->hspi,dev->tx_buffer,dev->dma_buffer,15);
 
-    while (!dev->spi_transfer_done);
+    while(!dev->spi_transfer_done);
     dev->spi_transfer_done=false;
 
     //SCB_InvalidateDCache_by_Addr((uint32_t*)dev->dma_buffer, 15);
 
     HAL_GPIO_WritePin(MPU6000_CS_PORT, MPU6000_CS_PIN, GPIO_PIN_SET);
-    dev->state=2;
 }
 
 void MPU6000_Process_DMA(MPU6000 *dev) {
@@ -91,15 +90,13 @@ void MPU6000_Process_DMA(MPU6000 *dev) {
     int16_t raw_gyro_y = (dev->dma_buffer[11] << 8) | dev->dma_buffer[12];
     int16_t raw_gyro_z = (dev->dma_buffer[13] << 8) | dev->dma_buffer[14];
 
-    dev->acc[0] = (float)raw_acc_x / ACCEL_SCALE;   // ±4g scale
+    dev->acc[0] = -(float)raw_acc_x / ACCEL_SCALE;   // ±4g scale
     dev->acc[1] = (float)raw_acc_y / ACCEL_SCALE;
-    dev->acc[2] = (float)raw_acc_z / ACCEL_SCALE;
+    dev->acc[2] = -(float)raw_acc_z / ACCEL_SCALE;
 
     dev->temp = ((float)raw_temp) / 340.0f + 36.53f;
 
-    dev->gyro[0] = (float)raw_gyro_x / GYRO_SCALE;   // ±500°/s
-    dev->gyro[1] = (float)raw_gyro_y / GYRO_SCALE;
-    dev->gyro[2] = (float)raw_gyro_z / GYRO_SCALE;
-
-    dev->state=0; // Reset after processing
+    dev->gyro[0] = -(float)raw_gyro_x / GYRO_SCALE;   // ±500°/s
+    dev->gyro[1] = -(float)raw_gyro_y / GYRO_SCALE;
+    dev->gyro[2] = -(float)raw_gyro_z / GYRO_SCALE;
 }

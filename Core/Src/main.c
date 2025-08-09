@@ -21,7 +21,6 @@
 #include "dma.h"
 #include "spi.h"
 #include "tim.h"
-#include "usb_device.h"
 #include "gpio.h"
 
 /* Private includes ----------------------------------------------------------*/
@@ -77,11 +76,13 @@ void SystemClock_Config(void);
 /* USER CODE BEGIN PFP */
 void HAL_SPI_TxCpltCallback(SPI_HandleTypeDef *hspi) {
     if (hspi->Instance == SPI4) {
+
         mpu.spi_transfer_done=true;
     }
 }
 void HAL_SPI_TxRxCpltCallback(SPI_HandleTypeDef *hspi) {
     if (hspi->Instance == SPI4) {
+    	mpu.state = 2;
         mpu.spi_transfer_done=true;
     }
 }
@@ -148,7 +149,6 @@ int main(void)
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_DMA_Init();
-  MX_USB_DEVICE_Init();
   MX_SPI4_Init();
   MX_TIM2_Init();
   MX_TIM8_Init();
@@ -157,11 +157,10 @@ int main(void)
   IIR_Filter_3D_Init(&gyro_filtered, IIR_GYR_ALPHA, IIR_GYR_BETA);
   MPU6000_Init(&mpu, &hspi4);
 
-  mpu.state=1;
+  mpu.state=0;
   for(int i=0;i<=14;i++) mpu.tx_buffer[i]=0xFF;
-  MPU6000_Start_DMA(&mpu);
   init_PIDs();
-
+  MPU6000_Start_DMA(&mpu);
   HAL_TIM_Base_Start_IT(&htim2);
   /* USER CODE END 2 */
 
@@ -171,23 +170,27 @@ int main(void)
   {
 	  if (mpu.state==2){
 		  MPU6000_Process_DMA(&mpu);
+		  mpu.state = 0;
+
 
 		  /*low-pass filter*/
 		  IIR_Filter_3D_Update(&acc_filtered, mpu.acc[0], mpu.acc[1], mpu.acc[2], &acc_x, &acc_y, &acc_z);
 		  IIR_Filter_3D_Update(&gyro_filtered, mpu.gyro[0], mpu.gyro[1], mpu.gyro[2], &gyro_p, &gyro_q, &gyro_r);
 
 		  /*Estimate pitch and roll*/
-		  float rollHat_acc_rad = atan2f(acc_y, acc_z);
-		  float pitchHat_acc_rad = atan2f(-acc_x, sqrtf(acc_y * acc_y + acc_z * acc_z));
+		  float rollHat_acc_rad = atan2f(acc_y, acc_z)*(180.0f/M_PI);
+		  float pitchHat_acc_rad = atan2f(-acc_x, sqrtf(acc_y * acc_y + acc_z * acc_z))*(180.0f/M_PI);
 
 		  float yawDot = gyro_r * (M_PI/ 180.0f);
-		  float rollDot = (gyro_p + tanf(pitchHat_acc_rad) * sinf(rollHat_acc_rad) * gyro_q + tanf(pitchHat_acc_rad) * cosf(rollHat_acc_rad) * gyro_r) * (M_PI / 180.0f);
-		  float pitchDot = (cosf(rollHat_acc_rad) * gyro_q - sinf(rollHat_acc_rad) * gyro_r) * (M_PI / 180.0f);
+		  float rollDot = (gyro_p + tanf(pitchHat_acc_rad) * sinf(rollHat_acc_rad) * gyro_q + tanf(pitchHat_acc_rad) * cosf(rollHat_acc_rad) * gyro_r);
+		  float pitchDot = (cosf(rollHat_acc_rad) * gyro_q - sinf(rollHat_acc_rad) * gyro_r);
 
 		  //Complementary filter
 		  roll = (1.0f - COMP_ALPHA) * rollHat_acc_rad + COMP_ALPHA * (roll + rollDot * dt );
 		  pitch = (1.0f - COMP_ALPHA) * pitchHat_acc_rad + COMP_ALPHA * (pitch + pitchDot * dt );
 		  yaw = yaw + yawDot*dt;
+		  if(yaw >= 360.0f) yaw-=360.0f;
+		  if(yaw < 0.0f) yaw += 360.f;
 
 		  float roll_out = PID_Compute(&pid_roll,roll_target,roll,dt);
 		  float pitch_out = PID_Compute(&pid_pitch,pitch_target,roll,dt);
@@ -198,11 +201,8 @@ int main(void)
 		  float m2 = throttle + pitch_out + roll_out - yaw_out;
 		  float m3 = throttle - pitch_out + roll_out + yaw_out;
 		  float m4 = throttle - pitch_out - roll_out - yaw_out;
-
-
 	  }
     /* USER CODE END WHILE */
-
 
     /* USER CODE BEGIN 3 */
   }
@@ -231,19 +231,17 @@ void SystemClock_Config(void)
   /** Initializes the RCC Oscillators according to the specified parameters
   * in the RCC_OscInitTypeDef structure.
   */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI|RCC_OSCILLATORTYPE_HSE;
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE;
   RCC_OscInitStruct.HSEState = RCC_HSE_ON;
-  RCC_OscInitStruct.HSIState = RCC_HSI_DIV1;
-  RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
   RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
   RCC_OscInitStruct.PLL.PLLM = 1;
-  RCC_OscInitStruct.PLL.PLLN = 19;
+  RCC_OscInitStruct.PLL.PLLN = 24;
   RCC_OscInitStruct.PLL.PLLP = 2;
-  RCC_OscInitStruct.PLL.PLLQ = 3;
+  RCC_OscInitStruct.PLL.PLLQ = 4;
   RCC_OscInitStruct.PLL.PLLR = 2;
   RCC_OscInitStruct.PLL.PLLRGE = RCC_PLL1VCIRANGE_3;
-  RCC_OscInitStruct.PLL.PLLVCOSEL = RCC_PLL1VCOMEDIUM;
+  RCC_OscInitStruct.PLL.PLLVCOSEL = RCC_PLL1VCOWIDE;
   RCC_OscInitStruct.PLL.PLLFRACN = 0;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
   {
@@ -255,7 +253,7 @@ void SystemClock_Config(void)
   RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
                               |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2
                               |RCC_CLOCKTYPE_D3PCLK1|RCC_CLOCKTYPE_D1PCLK1;
-  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_HSI;
+  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
   RCC_ClkInitStruct.SYSCLKDivider = RCC_SYSCLK_DIV1;
   RCC_ClkInitStruct.AHBCLKDivider = RCC_HCLK_DIV1;
   RCC_ClkInitStruct.APB3CLKDivider = RCC_APB3_DIV1;
@@ -263,7 +261,7 @@ void SystemClock_Config(void)
   RCC_ClkInitStruct.APB2CLKDivider = RCC_APB2_DIV2;
   RCC_ClkInitStruct.APB4CLKDivider = RCC_APB4_DIV1;
 
-  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_1) != HAL_OK)
+  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_2) != HAL_OK)
   {
     Error_Handler();
   }
