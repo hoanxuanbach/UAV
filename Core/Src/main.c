@@ -37,6 +37,26 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
+#define PID_KP_PITCH_INNER		10.0f
+#define PID_KD_PITCH_INNER		0.0f
+#define PID_KI_PITCH_INNER		0.5f
+#define PID_KP_PITCH_OUTER		10.0f
+#define PID_KD_PITCH_OUTER		0.0f
+#define PID_KI_PITCH_OUTER		0.5f
+
+#define PID_KP_ROLL_INNER		10.0f
+#define PID_KD_ROLL_INNER		0.0f
+#define PID_KI_ROLL_INNER		0.5f
+#define PID_KP_ROLL_OUTER		10.0f
+#define PID_KD_ROLL_OUTER		0.0f
+#define PID_KI_ROLL_OUTER		0.5f
+
+#define PID_KP_YAW				10.0f
+#define PID_KD_YAW				0.0f
+#define PID_KI_YAW				0.5f
+#define PID_KP_YAW_RATE			10.0f
+#define PID_KD_YAW_RATE			0.0f
+#define PID_KI_YAW_RATE			0.5f
 
 /* USER CODE END PD */
 
@@ -61,11 +81,12 @@ float roll_target = 0.0f;
 float yaw_target = 0.0f;
 
 float pitch,roll,yaw,yawHat_acc_rad;
-
+Double_PID_Controller PID_Controller_Roll, PID_Controller_Pitch;
+PID_Controller PID_Controller_Yaw, PID_Controller_Yaw_Rate;
 uint16_t throttle = 600;
 
 MPU6000 mpu;
-PID_Controller pid_roll, pid_pitch, pid_yaw;
+
 IIR_Filter_3D acc_filtered;
 IIR_Filter_3D gyro_filtered;
 
@@ -113,9 +134,17 @@ float get_roll(float Ax, float Az) {
 
 void init_PIDs(void)
 {
-    PID_Init(&pid_roll,  1.5f, 0.0f, 0.05f, 400.0f, 100.0f);
-    PID_Init(&pid_pitch, 1.5f, 0.0f, 0.05f, 400.0f, 100.0f);
-    PID_Init(&pid_yaw,   2.0f, 0.0f, 0.10f, 400.0f, 100.0f);
+//    PID_Init(&pid_roll,  1.5f, 0.0f, 0.05f, 400.0f, 100.0f);
+//    PID_Init(&pid_pitch, 1.5f, 0.0f, 0.05f, 400.0f, 100.0f);
+//    PID_Init(&pid_yaw,   2.0f, 0.0f, 0.10f, 400.0f, 100.0f);
+	PID_Init(&PID_Controller_Pitch.inner_loop, PID_KP_PITCH_INNER, PID_KI_PITCH_INNER, PID_KD_PITCH_INNER, 400.0f, 100.0f);
+	PID_Init(&PID_Controller_Roll.inner_loop, PID_KP_ROLL_INNER, PID_KI_ROLL_INNER, PID_KD_ROLL_INNER, 400.0f, 100.0f);
+	PID_Init(&PID_Controller_Yaw, PID_KP_YAW, PID_KI_YAW, PID_KD_YAW, 400.0f, 100.0f);
+
+	PID_Init(&PID_Controller_Pitch.outer_loop, PID_KP_PITCH_OUTER, PID_KI_PITCH_OUTER, PID_KD_PITCH_OUTER, 400.0f, 100.0f);
+	PID_Init(&PID_Controller_Roll.outer_loop, PID_KP_ROLL_OUTER, PID_KI_ROLL_OUTER, PID_KD_ROLL_OUTER, 400.0f, 100.0f);
+	PID_Init(&PID_Controller_Yaw_Rate, PID_KP_YAW_RATE, PID_KI_YAW_RATE, PID_KD_YAW_RATE, 400.0f, 100.0f);
+
 }
 /* USER CODE END 0 */
 
@@ -192,9 +221,9 @@ int main(void)
 		  if(yaw >= 360.0f) yaw-=360.0f;
 		  if(yaw < 0.0f) yaw += 360.f;
 
-		  float roll_out = PID_Compute(&pid_roll,roll_target,roll,dt);
-		  float pitch_out = PID_Compute(&pid_pitch,pitch_target,roll,dt);
-		  float yaw_out = PID_Compute(&pid_yaw,yaw_target,roll,dt);
+		  float roll_out = PID_Double_Calculation(&PID_Controller_Roll, roll_target, roll, rollDot, dt);
+		  float pitch_out = PID_Double_Calculation(&PID_Controller_Pitch, pitch_target, pitch, pitchDot, dt);
+		  float yaw_out = 0;
 
 
 		  float m1 = throttle + pitch_out - roll_out + yaw_out;
@@ -224,7 +253,7 @@ void SystemClock_Config(void)
 
   /** Configure the main internal regulator output voltage
   */
-  __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE3);
+  __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE0);
 
   while(!__HAL_PWR_GET_FLAG(PWR_FLAG_VOSRDY)) {}
 
@@ -236,9 +265,9 @@ void SystemClock_Config(void)
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
   RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
   RCC_OscInitStruct.PLL.PLLM = 1;
-  RCC_OscInitStruct.PLL.PLLN = 24;
+  RCC_OscInitStruct.PLL.PLLN = 120;
   RCC_OscInitStruct.PLL.PLLP = 2;
-  RCC_OscInitStruct.PLL.PLLQ = 4;
+  RCC_OscInitStruct.PLL.PLLQ = 3;
   RCC_OscInitStruct.PLL.PLLR = 2;
   RCC_OscInitStruct.PLL.PLLRGE = RCC_PLL1VCIRANGE_3;
   RCC_OscInitStruct.PLL.PLLVCOSEL = RCC_PLL1VCOWIDE;
@@ -255,13 +284,13 @@ void SystemClock_Config(void)
                               |RCC_CLOCKTYPE_D3PCLK1|RCC_CLOCKTYPE_D1PCLK1;
   RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
   RCC_ClkInitStruct.SYSCLKDivider = RCC_SYSCLK_DIV1;
-  RCC_ClkInitStruct.AHBCLKDivider = RCC_HCLK_DIV1;
-  RCC_ClkInitStruct.APB3CLKDivider = RCC_APB3_DIV1;
-  RCC_ClkInitStruct.APB1CLKDivider = RCC_APB1_DIV1;
+  RCC_ClkInitStruct.AHBCLKDivider = RCC_HCLK_DIV2;
+  RCC_ClkInitStruct.APB3CLKDivider = RCC_APB3_DIV2;
+  RCC_ClkInitStruct.APB1CLKDivider = RCC_APB1_DIV2;
   RCC_ClkInitStruct.APB2CLKDivider = RCC_APB2_DIV2;
-  RCC_ClkInitStruct.APB4CLKDivider = RCC_APB4_DIV1;
+  RCC_ClkInitStruct.APB4CLKDivider = RCC_APB4_DIV2;
 
-  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_2) != HAL_OK)
+  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_4) != HAL_OK)
   {
     Error_Handler();
   }
