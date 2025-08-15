@@ -274,7 +274,7 @@ int main(void)
 
 	  }
 	  else{
-		  //0 <= m1, m2, m3, m4 <= 2000
+		  //0 <= m1, m2, m3, m4 <= 1999
 		  Dshot_PrepareFrame(m1, DShot_MemoryBufferMotor1);
 		  Dshot_PrepareFrame(m2, DShot_MemoryBufferMotor2);
 		  Dshot_PrepareFrame(m3, DShot_MemoryBufferMotor3);
