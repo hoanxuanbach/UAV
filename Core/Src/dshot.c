@@ -38,6 +38,7 @@ void Dshot_Calibrate(uint32_t *mem_buffer) {
 }
 
 void Dshot_PrepareFrame(uint16_t throttleValue, uint32_t *mem_buffer) {
+	throttleValue += 48; //vì Dshot đi từ 48 -> 2047
     uint16_t frame = Dshot_GetDshotFrame(throttleValue);
 
     for (int i = 0; i < MEM_BUFFER_LENGTH; i++) {
