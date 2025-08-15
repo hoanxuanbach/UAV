@@ -28,6 +28,8 @@
 #include "mpu6000.h"
 #include "filter.h"
 #include "pid.h"
+#include "dshot.h"
+#include <string.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -37,26 +39,26 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define PID_KP_PITCH_INNER		10.0f
+#define PID_KP_PITCH_INNER		1.0f
 #define PID_KD_PITCH_INNER		0.0f
-#define PID_KI_PITCH_INNER		0.5f
-#define PID_KP_PITCH_OUTER		10.0f
+#define PID_KI_PITCH_INNER		0.0f
+#define PID_KP_PITCH_OUTER		5.0f
 #define PID_KD_PITCH_OUTER		0.0f
-#define PID_KI_PITCH_OUTER		0.5f
+#define PID_KI_PITCH_OUTER		0.0f
 
-#define PID_KP_ROLL_INNER		10.0f
+#define PID_KP_ROLL_INNER		1.0f
 #define PID_KD_ROLL_INNER		0.0f
-#define PID_KI_ROLL_INNER		0.5f
-#define PID_KP_ROLL_OUTER		10.0f
+#define PID_KI_ROLL_INNER		0.0f
+#define PID_KP_ROLL_OUTER		5.0f
 #define PID_KD_ROLL_OUTER		0.0f
-#define PID_KI_ROLL_OUTER		0.5f
+#define PID_KI_ROLL_OUTER		0.0f
 
-#define PID_KP_YAW				10.0f
+#define PID_KP_YAW				5.0f
 #define PID_KD_YAW				0.0f
-#define PID_KI_YAW				0.5f
-#define PID_KP_YAW_RATE			10.0f
+#define PID_KI_YAW				0.0f
+#define PID_KP_YAW_RATE			5.0f
 #define PID_KD_YAW_RATE			0.0f
-#define PID_KI_YAW_RATE			0.5f
+#define PID_KI_YAW_RATE			0.0f
 
 /* USER CODE END PD */
 
@@ -81,14 +83,29 @@ float roll_target = 0.0f;
 float yaw_target = 0.0f;
 
 float pitch,roll,yaw,yawHat_acc_rad;
+float roll_rad, pitch_rad, yaw_rad;
 Double_PID_Controller PID_Controller_Roll, PID_Controller_Pitch;
 PID_Controller PID_Controller_Yaw, PID_Controller_Yaw_Rate;
-uint16_t throttle = 600;
+uint16_t throttle = 1000;
 
 MPU6000 mpu;
-
+float rollHat_acc_rad;
+float pitchHat_acc_rad;
 IIR_Filter_3D acc_filtered;
 IIR_Filter_3D gyro_filtered;
+
+uint32_t DShot_MemoryBufferMotor1[MEM_BUFFER_LENGTH] = {0};
+uint32_t DShot_DMABufferMotor1[DMA_BUFFER_LENGTH] = {0};
+uint32_t DShot_MemoryBufferMotor2[MEM_BUFFER_LENGTH] = {0};
+uint32_t DShot_DMABufferMotor2[DMA_BUFFER_LENGTH] = {0};
+uint32_t DShot_MemoryBufferMotor3[MEM_BUFFER_LENGTH] = {0};
+uint32_t DShot_DMABufferMotor3[DMA_BUFFER_LENGTH] = {0};
+uint32_t DShot_MemoryBufferMotor4[MEM_BUFFER_LENGTH] = {0};
+uint32_t DShot_DMABufferMotor4[DMA_BUFFER_LENGTH] = {0};
+
+bool motor_armed;
+
+float m1,m2,m3,m4;
 
 /* USER CODE END PV */
 
@@ -115,6 +132,32 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
         {
         	mpu.state = 1;
             MPU6000_Start_DMA(&mpu);
+        }
+    }
+}
+void HAL_TIM_PWM_PulseFinishedHalfCpltCallback(TIM_HandleTypeDef *htim)
+{
+    if (htim->Instance == TIM5)
+    {
+        if (htim->Channel == HAL_TIM_ACTIVE_CHANNEL_1)
+        {
+            memcpy(DShot_DMABufferMotor1, DShot_MemoryBufferMotor1,
+                   MEM_BUFFER_LENGTH * sizeof(DShot_DMABufferMotor1[0]));
+        }
+        else if (htim->Channel == HAL_TIM_ACTIVE_CHANNEL_2)
+        {
+            memcpy(DShot_DMABufferMotor2, DShot_MemoryBufferMotor2,
+                   MEM_BUFFER_LENGTH * sizeof(DShot_DMABufferMotor2[0]));
+        }
+        else if (htim->Channel == HAL_TIM_ACTIVE_CHANNEL_3)
+        {
+            memcpy(DShot_DMABufferMotor3, DShot_MemoryBufferMotor3,
+                   MEM_BUFFER_LENGTH * sizeof(DShot_DMABufferMotor3[0]));
+        }
+        else if (htim->Channel == HAL_TIM_ACTIVE_CHANNEL_4)
+        {
+            memcpy(DShot_DMABufferMotor4, DShot_MemoryBufferMotor4,
+                   MEM_BUFFER_LENGTH * sizeof(DShot_DMABufferMotor4[0]));
         }
     }
 }
@@ -180,7 +223,7 @@ int main(void)
   MX_DMA_Init();
   MX_SPI4_Init();
   MX_TIM2_Init();
-  MX_TIM8_Init();
+  MX_TIM5_Init();
   /* USER CODE BEGIN 2 */
   IIR_Filter_3D_Init(&acc_filtered, IIR_ACC_ALPHA, IIR_ACC_BETA);
   IIR_Filter_3D_Init(&gyro_filtered, IIR_GYR_ALPHA, IIR_GYR_BETA);
@@ -189,14 +232,55 @@ int main(void)
   mpu.state=0;
   for(int i=0;i<=14;i++) mpu.tx_buffer[i]=0xFF;
   init_PIDs();
+  MPU6000_Calibrate(&mpu);
   MPU6000_Start_DMA(&mpu);
+
   HAL_TIM_Base_Start_IT(&htim2);
+
+  Dshot_DMABuffer_init(DShot_DMABufferMotor1);
+  Dshot_DMABuffer_init(DShot_DMABufferMotor2);
+  Dshot_DMABuffer_init(DShot_DMABufferMotor3);
+  Dshot_DMABuffer_init(DShot_DMABufferMotor4);
+
+
+  Dshot_MemoryBuffer_init(DShot_MemoryBufferMotor1);
+  Dshot_MemoryBuffer_init(DShot_MemoryBufferMotor2);
+  Dshot_MemoryBuffer_init(DShot_MemoryBufferMotor3);
+  Dshot_MemoryBuffer_init(DShot_MemoryBufferMotor4);
+
+  Dshot_Calibrate(DShot_DMABufferMotor1);
+  Dshot_Calibrate(DShot_DMABufferMotor2);
+  Dshot_Calibrate(DShot_DMABufferMotor3);
+  Dshot_Calibrate(DShot_DMABufferMotor4);
+
+  HAL_TIM_PWM_Start_DMA(&htim5, TIM_CHANNEL_1, DShot_DMABufferMotor1, DMA_BUFFER_LENGTH);
+  HAL_TIM_PWM_Start_DMA(&htim5, TIM_CHANNEL_2, DShot_DMABufferMotor2, DMA_BUFFER_LENGTH);
+  HAL_TIM_PWM_Start_DMA(&htim5, TIM_CHANNEL_3, DShot_DMABufferMotor3, DMA_BUFFER_LENGTH);
+  HAL_TIM_PWM_Start_DMA(&htim5, TIM_CHANNEL_4, DShot_DMABufferMotor4, DMA_BUFFER_LENGTH);
+
+  HAL_Delay(2000);
+  motor_armed = true;
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+	  if (!motor_armed){
+		  Dshot_PrepareFrame(0, DShot_MemoryBufferMotor1);
+		  Dshot_PrepareFrame(0, DShot_MemoryBufferMotor2);
+		  Dshot_PrepareFrame(0, DShot_MemoryBufferMotor3);
+		  Dshot_PrepareFrame(0, DShot_MemoryBufferMotor4);
+
+	  }
+	  else{
+		  //0 <= m1, m2, m3, m4 <= 2000
+		  Dshot_PrepareFrame(m1, DShot_MemoryBufferMotor1);
+		  Dshot_PrepareFrame(m2, DShot_MemoryBufferMotor2);
+		  Dshot_PrepareFrame(m3, DShot_MemoryBufferMotor3);
+		  Dshot_PrepareFrame(m4, DShot_MemoryBufferMotor4);
+	  }
+
 	  if (mpu.state==2){
 		  MPU6000_Process_DMA(&mpu);
 		  mpu.state = 0;
@@ -207,29 +291,42 @@ int main(void)
 		  IIR_Filter_3D_Update(&gyro_filtered, mpu.gyro[0], mpu.gyro[1], mpu.gyro[2], &gyro_p, &gyro_q, &gyro_r);
 
 		  /*Estimate pitch and roll*/
-		  float rollHat_acc_rad = atan2f(acc_y, acc_z)*(180.0f/M_PI);
-		  float pitchHat_acc_rad = atan2f(-acc_x, sqrtf(acc_y * acc_y + acc_z * acc_z))*(180.0f/M_PI);
+		  rollHat_acc_rad = atan2f(acc_y, acc_z);
+		  pitchHat_acc_rad = atan2f(-acc_x, sqrtf(acc_y * acc_y + acc_z * acc_z));
 
-		  float yawDot = gyro_r * (M_PI/ 180.0f);
-		  float rollDot = (gyro_p + tanf(pitchHat_acc_rad) * sinf(rollHat_acc_rad) * gyro_q + tanf(pitchHat_acc_rad) * cosf(rollHat_acc_rad) * gyro_r);
-		  float pitchDot = (cosf(rollHat_acc_rad) * gyro_q - sinf(rollHat_acc_rad) * gyro_r);
+		  float yawDot_rad = gyro_r * (M_PI / 180.0f);
+		  float rollDot_rad = (gyro_p * (M_PI / 180.0f) + tanf(pitchHat_acc_rad) * sinf(rollHat_acc_rad) * gyro_q * (M_PI / 180.0f) + tanf(pitchHat_acc_rad) * cosf(rollHat_acc_rad) * gyro_r * (M_PI / 180.0f));
+		  float pitchDot_rad = (cosf(rollHat_acc_rad) * gyro_q * (M_PI / 180.0f) - sinf(rollHat_acc_rad) * gyro_r * (M_PI / 180.0f));
 
 		  //Complementary filter
-		  roll = (1.0f - COMP_ALPHA) * rollHat_acc_rad + COMP_ALPHA * (roll + rollDot * dt );
-		  pitch = (1.0f - COMP_ALPHA) * pitchHat_acc_rad + COMP_ALPHA * (pitch + pitchDot * dt );
-		  yaw = yaw + yawDot*dt;
-		  if(yaw >= 360.0f) yaw-=360.0f;
-		  if(yaw < 0.0f) yaw += 360.f;
+		  roll_rad = (1.0f - COMP_ALPHA) * rollHat_acc_rad + COMP_ALPHA * (roll_rad + rollDot_rad * dt );
+		  pitch_rad = (1.0f - COMP_ALPHA) * pitchHat_acc_rad + COMP_ALPHA * (pitch_rad + pitchDot_rad * dt );
+		  yaw_rad = yaw_rad + yawDot_rad*dt;
+
+		  while (yaw_rad >= 2.0f * M_PI) yaw_rad -= 2.0f * M_PI;
+		  while (yaw_rad < 0.0f)         yaw_rad += 2.0f * M_PI;
+
+		  float yawDot = yawDot_rad * (180.0f / M_PI);
+		  float rollDot = rollDot_rad * (180.0f / M_PI);
+		  float pitchDot = pitchDot_rad * (180.0f / M_PI);
+
+		  roll = roll_rad * (180.0f / M_PI);
+		  pitch = pitch_rad * (180.0f / M_PI);
+		  yaw = yaw_rad * (180.0f / M_PI);
+
+
 
 		  float roll_out = PID_Double_Calculation(&PID_Controller_Roll, roll_target, roll, rollDot, dt);
 		  float pitch_out = PID_Double_Calculation(&PID_Controller_Pitch, pitch_target, pitch, pitchDot, dt);
-		  float yaw_out = 0;
+		  float yaw_out = PID_Yaw_Angle_Calculation(&PID_Controller_Yaw, yaw_target, yaw, yawDot, dt);
 
 
-		  float m1 = throttle + pitch_out - roll_out + yaw_out;
-		  float m2 = throttle + pitch_out + roll_out - yaw_out;
-		  float m3 = throttle - pitch_out + roll_out + yaw_out;
-		  float m4 = throttle - pitch_out - roll_out - yaw_out;
+		  m1 = throttle + pitch_out - roll_out + yaw_out;
+		  m2 = throttle + pitch_out + roll_out - yaw_out;
+		  m3 = throttle - pitch_out + roll_out + yaw_out;
+		  m4 = throttle - pitch_out - roll_out - yaw_out;
+
+
 	  }
     /* USER CODE END WHILE */
 
@@ -253,7 +350,7 @@ void SystemClock_Config(void)
 
   /** Configure the main internal regulator output voltage
   */
-  __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE0);
+  __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE3);
 
   while(!__HAL_PWR_GET_FLAG(PWR_FLAG_VOSRDY)) {}
 
@@ -265,7 +362,7 @@ void SystemClock_Config(void)
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
   RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
   RCC_OscInitStruct.PLL.PLLM = 1;
-  RCC_OscInitStruct.PLL.PLLN = 120;
+  RCC_OscInitStruct.PLL.PLLN = 24;
   RCC_OscInitStruct.PLL.PLLP = 2;
   RCC_OscInitStruct.PLL.PLLQ = 3;
   RCC_OscInitStruct.PLL.PLLR = 2;
@@ -284,13 +381,13 @@ void SystemClock_Config(void)
                               |RCC_CLOCKTYPE_D3PCLK1|RCC_CLOCKTYPE_D1PCLK1;
   RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
   RCC_ClkInitStruct.SYSCLKDivider = RCC_SYSCLK_DIV1;
-  RCC_ClkInitStruct.AHBCLKDivider = RCC_HCLK_DIV2;
+  RCC_ClkInitStruct.AHBCLKDivider = RCC_HCLK_DIV1;
   RCC_ClkInitStruct.APB3CLKDivider = RCC_APB3_DIV2;
   RCC_ClkInitStruct.APB1CLKDivider = RCC_APB1_DIV2;
   RCC_ClkInitStruct.APB2CLKDivider = RCC_APB2_DIV2;
   RCC_ClkInitStruct.APB4CLKDivider = RCC_APB4_DIV2;
 
-  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_4) != HAL_OK)
+  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_2) != HAL_OK)
   {
     Error_Handler();
   }

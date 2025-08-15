@@ -63,15 +63,22 @@ typedef struct{
 	SPI_HandleTypeDef *hspi;
 	float acc[3];
 	float gyro[3];
+
+    float acc_offset[3];
+    float gyro_offset[3];
+
 	float temp;
-	volatile uint8_t tx_buffer[16];
-	volatile uint8_t dma_buffer[16];
+	uint8_t tx_buffer[16];
+	uint8_t dma_buffer[16];
+	bool calibrated;
 	volatile uint8_t state;
+	volatile bool data_ready;
 	volatile bool spi_transfer_done;
 } MPU6000;
 
 void MPU6000_Start_DMA(MPU6000 *dev);
 void MPU6000_Process_DMA(MPU6000 *dev);
+void MPU6000_Calibrate(MPU6000 *dev);
 uint16_t MPU6000_Read(MPU6000 *dev,uint8_t reg);
 void MPU6000_Write(MPU6000 *dev,uint8_t reg,uint8_t data);
 void MPU6000_Init(MPU6000 *dev,SPI_HandleTypeDef *hspi);

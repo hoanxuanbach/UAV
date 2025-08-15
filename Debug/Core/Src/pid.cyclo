@@ -1,3 +1,6 @@
 ../Core/Src/pid.c:3:6:PID_Init	1
-../Core/Src/pid.c:17:7:PID_Compute	5
-../Core/Src/pid.c:39:6:PID_Reset	1
+../Core/Src/pid.c:23:7:PID_Compute	5
+../Core/Src/pid.c:54:7:PID_Double_Calculation	7
+../Core/Src/pid.c:96:7:PID_Yaw_Angle_Calculation	3
+../Core/Src/pid.c:114:7:PID_Yaw_Rate_Calculation	1
+../Core/Src/pid.c:129:6:PID_Reset	1

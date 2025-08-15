@@ -1,4 +1,3 @@
-"./Core/Src/DshotPWM.o"
 "./Core/Src/dma.o"
 "./Core/Src/dshot.o"
 "./Core/Src/filter.o"

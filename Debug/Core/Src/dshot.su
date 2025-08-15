@@ -1,0 +1,7 @@
+../Core/Src/dshot.c:5:10:Dshot_CalculateCRCandTelemtryBit	16	static
+../Core/Src/dshot.c:10:10:Dshot_GetDshotFrame	24	static
+../Core/Src/dshot.c:14:6:Dshot_DMABuffer_init	24	static
+../Core/Src/dshot.c:20:6:Dshot_MemoryBuffer_init	24	static
+../Core/Src/dshot.c:26:6:Dshot_DshotFrame_to_buffer	24	static
+../Core/Src/dshot.c:34:6:Dshot_Calibrate	24	static
+../Core/Src/dshot.c:40:6:Dshot_PrepareFrame	24	static

@@ -90,13 +90,55 @@ void MPU6000_Process_DMA(MPU6000 *dev) {
     int16_t raw_gyro_y = (dev->dma_buffer[11] << 8) | dev->dma_buffer[12];
     int16_t raw_gyro_z = (dev->dma_buffer[13] << 8) | dev->dma_buffer[14];
 
-    dev->acc[0] = -(float)raw_acc_x / ACCEL_SCALE;   // ±4g scale
-    dev->acc[1] = (float)raw_acc_y / ACCEL_SCALE;
+    dev->acc[0] = (float)raw_acc_x / ACCEL_SCALE;   // ±4g scale
+    dev->acc[1] = -(float)raw_acc_y / ACCEL_SCALE;
     dev->acc[2] = -(float)raw_acc_z / ACCEL_SCALE;
 
     dev->temp = ((float)raw_temp) / 340.0f + 36.53f;
 
-    dev->gyro[0] = -(float)raw_gyro_x / GYRO_SCALE;   // ±500°/s
+    dev->gyro[0] = (float)raw_gyro_x / GYRO_SCALE;   // ±500°/s
     dev->gyro[1] = -(float)raw_gyro_y / GYRO_SCALE;
     dev->gyro[2] = -(float)raw_gyro_z / GYRO_SCALE;
+
+    if (dev->calibrated){
+        for (uint8_t i = 0; i < 3; i++){
+        	dev->acc[i] -= dev->acc_offset[i];
+        	dev->gyro[i] -= dev->gyro_offset[i];
+        }
+    }
 }
+
+void MPU6000_Calibrate(MPU6000 *dev) {
+    const uint16_t samples = 3000;
+
+    float acc_sum[3] = {0}, gyro_sum[3] = {0};
+
+    for (uint16_t i = 0; i < samples; i++) {
+        // Read one set of sensor values
+        MPU6000_Start_DMA(dev);
+        MPU6000_Process_DMA(dev);
+
+        for (uint8_t axis = 0; axis < 3; axis++) {
+            acc_sum[axis]  += dev->acc[axis];
+            gyro_sum[axis] += dev->gyro[axis];
+        }
+
+        HAL_Delay(1); // Adjust delay depending on your sampling rate
+    }
+
+    // Compute average offsets
+    for (uint8_t axis = 0; axis < 3; axis++) {
+        dev->acc_offset[axis]  = acc_sum[axis] / samples;
+        dev->gyro_offset[axis] = gyro_sum[axis] / samples;
+    }
+
+    // For accelerometer Z axis, remove gravity (assuming +Z is upward)
+    dev->acc_offset[2] -= 1.0f;
+
+    dev->calibrated = true;
+
+
+}
+
+
+

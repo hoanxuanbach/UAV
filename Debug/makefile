@@ -60,8 +60,8 @@ all: main-build
 main-build: H743VIT6_Flight_Controller.elf secondary-outputs
 
 # Tool invocations
-H743VIT6_Flight_Controller.elf H743VIT6_Flight_Controller.map: $(OBJS) $(USER_OBJS) C:\Bach\Work\UAV\H743VIT6_Flight_Controller\STM32H743VITX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
-	arm-none-eabi-gcc -o "H743VIT6_Flight_Controller.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m7 -T"C:\Bach\Work\UAV\H743VIT6_Flight_Controller\STM32H743VITX_FLASH.ld" --specs=nosys.specs -Wl,-Map="H743VIT6_Flight_Controller.map" -Wl,--gc-sections -static -u _printf_float --specs=nano.specs -mfpu=fpv5-d16 -mfloat-abi=hard -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
+H743VIT6_Flight_Controller.elf H743VIT6_Flight_Controller.map: $(OBJS) $(USER_OBJS) C:\Users\Admin\Desktop\BOSCH\H743VIT6_Flight_Controller\STM32H743VITX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
+	arm-none-eabi-gcc -o "H743VIT6_Flight_Controller.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m7 -T"C:\Users\Admin\Desktop\BOSCH\H743VIT6_Flight_Controller\STM32H743VITX_FLASH.ld" --specs=nosys.specs -Wl,-Map="H743VIT6_Flight_Controller.map" -Wl,--gc-sections -static -u _printf_float --specs=nano.specs -mfpu=fpv5-d16 -mfloat-abi=hard -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
 	@echo 'Finished building target: $@'
 	@echo ' '
 

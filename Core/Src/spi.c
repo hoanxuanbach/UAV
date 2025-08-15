@@ -66,7 +66,8 @@ void MX_SPI4_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN SPI4_Init 2 */
-
+  hdma_spi4_tx.Init.Request = DMA_REQUEST_SPI4_TX;
+  __HAL_LINKDMA(&hspi4, hdmatx, hdma_spi4_tx);
   /* USER CODE END SPI4_Init 2 */
 
 }
@@ -117,7 +118,7 @@ void HAL_SPI_MspInit(SPI_HandleTypeDef* spiHandle)
     hdma_spi4_rx.Init.PeriphDataAlignment = DMA_PDATAALIGN_BYTE;
     hdma_spi4_rx.Init.MemDataAlignment = DMA_MDATAALIGN_BYTE;
     hdma_spi4_rx.Init.Mode = DMA_NORMAL;
-    hdma_spi4_rx.Init.Priority = DMA_PRIORITY_VERY_HIGH;
+    hdma_spi4_rx.Init.Priority = DMA_PRIORITY_HIGH;
     hdma_spi4_rx.Init.FIFOMode = DMA_FIFOMODE_DISABLE;
     if (HAL_DMA_Init(&hdma_spi4_rx) != HAL_OK)
     {
@@ -135,7 +136,7 @@ void HAL_SPI_MspInit(SPI_HandleTypeDef* spiHandle)
     hdma_spi4_tx.Init.PeriphDataAlignment = DMA_PDATAALIGN_BYTE;
     hdma_spi4_tx.Init.MemDataAlignment = DMA_MDATAALIGN_BYTE;
     hdma_spi4_tx.Init.Mode = DMA_NORMAL;
-    hdma_spi4_tx.Init.Priority = DMA_PRIORITY_VERY_HIGH;
+    hdma_spi4_tx.Init.Priority = DMA_PRIORITY_HIGH;
     hdma_spi4_tx.Init.FIFOMode = DMA_FIFOMODE_DISABLE;
     if (HAL_DMA_Init(&hdma_spi4_tx) != HAL_OK)
     {
